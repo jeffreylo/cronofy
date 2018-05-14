@@ -41,7 +41,7 @@ func main() {
 	}
 	tz, _ := time.LoadLocation(*timezone)
 	for _, v := range res.Events {
-		if v.Accepted() {
+		if v.Accepted() && v.StartTime().After(now) {
 			if v.Location() != "" {
 				fmt.Printf("%s: %s [%s]\n", v.StartTime().In(tz).Format(time.RFC822), v.Summary, v.Location())
 			} else {

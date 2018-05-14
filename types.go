@@ -1,7 +1,7 @@
 package cronofy
 
 import (
-	"log"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"time"
@@ -31,7 +31,7 @@ type EventsResponse struct {
 
 type EventsRequest struct {
 	CalendarIDs    []string   `url:"calendar_ids[],omitempty"`
-	From           *time.Time `url:"from,omitempty"`
+	From           *string    `url:"from,omitempty"`
 	IncludeDeleted *bool      `url:"include_deleted,omitempty"`
 	IncludeGeo     *bool      `url:"include_geo,omitempty"`
 	IncludeMoved   *bool      `url:"include_moved,omitempty"`
@@ -39,7 +39,7 @@ type EventsRequest struct {
 	LocalizedTimes *bool      `url:"localized_times,omitempty"`
 	OnlyManaged    *bool      `url:"only_managed,omitempty"`
 	TZID           string     `url:"tzid"`
-	To             *time.Time `url:"to,omitempty"`
+	To             *string    `url:"to,omitempty"`
 }
 
 type Event struct {
@@ -75,6 +75,26 @@ type Event struct {
 		Update                    bool `json:"update"`
 		ChangeParticipationStatus bool `json:"change_participation_status"`
 	} `json:"options"`
+
+	StartTime *time.Time
+	EndTime   *time.Time
+	AllDay    bool
+}
+
+func (e *Event) UnmarshalJSON(b []byte) error {
+	type event Event
+	res := event{}
+	if err := json.Unmarshal(b, &res); err != nil {
+		return err
+	}
+
+	start, allDay, _ := parseDateTime(res.Start)
+	end, _, _ := parseDateTime(res.End)
+	res.StartTime = start
+	res.EndTime = end
+	res.AllDay = allDay
+	*e = Event(res)
+	return nil
 }
 
 func (e *Event) Accepted() bool {
@@ -85,15 +105,18 @@ func (e *Event) Declined() bool {
 	return e.ParticipationStatus == "declined"
 }
 
-func (e *Event) StartTime() *time.Time {
-	t, err := time.Parse(time.RFC3339, e.Start)
+func parseDateTime(v string) (*time.Time, bool, error) {
+	var allDay bool
+	t, err := time.Parse(time.RFC3339, v)
 	if err != nil {
-		t, err = time.Parse("2006-01-02", e.Start)
+		t, err = time.Parse("2006-01-02", v)
 		if err != nil {
-			log.Println(err)
+			panic(err)
 		}
+		t = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+		allDay = true
 	}
-	return &t
+	return &t, allDay, nil
 }
 
 var re = regexp.MustCompile(`\r?\n`)
